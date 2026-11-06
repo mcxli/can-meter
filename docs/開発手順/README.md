@@ -28,8 +28,8 @@
 
 ```text
 firmware/
-  main/          メイン機のESP-IDFプロジェクト
-  gps/           サブ機のESP-IDFプロジェクト
+  main/          メイン機のRustプロジェクト（esp-idf-svc）
+  gps/           サブ機のRustプロジェクト（esp-idf-svc）
   shared/        共通の通信形式・データ定義
 docs/
   開発手順/      本文書群
