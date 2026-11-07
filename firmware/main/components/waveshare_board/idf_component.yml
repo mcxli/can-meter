@@ -1,0 +1,9 @@
+dependencies:
+  idf:
+    version: ">=5.1.0"
+  lvgl/lvgl:
+    version: ">8.3.9,<9"
+    public: true
+  # 公式サンプル同梱の版に固定する（1.2.x は scl_speed_hz を設定し、旧I2Cドライバでエラーになる）
+  espressif/esp_lcd_touch_gt911: "1.1.1~1"
+  espressif/esp_lcd_touch: "1.1.2"

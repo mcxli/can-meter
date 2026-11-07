@@ -20,6 +20,10 @@ esp-idf-sys = { git = "https://github.com/esp-rs/esp-idf.git" }
 esp-idf-hal = { git = "https://github.com/esp-rs/esp-idf.git" }
 esp-idf-svc = { git = "https://github.com/esp-rs/esp-idf.git" }
 
+[[package.metadata.esp-idf-sys.extra_components]]
+component_dirs = ["components"]
+bindings_header = "bindings.h"
+
 [dependencies]
 log = "0.4"
 esp-idf-svc = { version = "0.53", features = ["critical-section", "embassy-time-driver", "embassy-sync"] }

@@ -1,24 +1,27 @@
-use esp_idf_svc::sys::{heap_caps_get_free_size, heap_caps_get_total_size, MALLOC_CAP_INTERNAL, MALLOC_CAP_SPIRAM};
+use esp_idf_svc::sys::*;
 
 fn main() {
-    // It is necessary to call this function once. Otherwise, some patches to the runtime
-    // implemented by esp-idf-sys might not link properly. See https://github.com/esp-rs/esp-idf-template/issues/71
     esp_idf_svc::sys::link_patches();
-
-    // Bind the log crate to the ESP Logging facilities
     esp_idf_svc::log::EspLogger::initialize_default();
 
-    log::info!("CAN meter main: boot");
+    log::info!("CAN meter main (Rust): display trial");
 
-    // PSRAM・内部RAMの容量を起動ログに出す（段階1の確認用）
-    let (psram_total, psram_free, internal_total, internal_free) = unsafe {
-        (
-            heap_caps_get_total_size(MALLOC_CAP_SPIRAM),
-            heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
-            heap_caps_get_total_size(MALLOC_CAP_INTERNAL),
-            heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
-        )
-    };
-    log::info!("PSRAM: total={psram_total} free={psram_free}");
-    log::info!("Internal RAM: total={internal_total} free={internal_free}");
+    unsafe {
+        // LCD・タッチ・LVGLタスクの初期化（C側のボード用ポート）
+        waveshare_esp32_s3_rgb_lcd_init();
+        // バックライトは自動ではオンにならない（段階2の知見）。明示的にオンにする
+        wavesahre_rgb_lcd_bl_on();
+
+        // LVGLのAPIはスレッドセーフではないため、ロックしてから操作する
+        if lvgl_port_lock(-1) {
+            lv_demo_widgets();
+            // Rustから作ったラベルを最前面に表示する
+            let label = lv_label_create(lv_disp_get_layer_top(lv_disp_get_default()));
+            lv_label_set_text(label, c"Rust + LVGL".as_ptr());
+            lv_obj_align(label, LV_ALIGN_TOP_LEFT as u8, 8, 4);
+            lvgl_port_unlock();
+        }
+    }
+
+    log::info!("display trial: init done");
 }
