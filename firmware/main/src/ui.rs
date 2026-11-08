@@ -47,6 +47,7 @@ const NOTICE_RELEASE_RPM: u16 = 6000;
 const NOTICE_BLINK_MS: u32 = 400;
 
 /// 仮データで動作していることを画面に出す（右上のタグ。タップで仮データの種類を切り替える）。
+/// 右下のFPS・CPU使用率（LVGLの性能モニタ）も、これが `true` のときだけ表示する。
 /// 実データに切り替えるとき（段階7）は `false` にする。
 const SHOW_DEMO_TAG: bool = true;
 
@@ -196,6 +197,8 @@ struct Ui {
     notice: ShiftNotice,
     /// 総合・レースのギア表示に最後に適用した色の状態（変化したときだけ更新する）
     gear_applied: [Option<GearDisplay>; 2],
+    /// 性能モニタの表示・非表示を反映済みか（LVGLが最初の描画で部品を作るため、作られるまで繰り返す）
+    perf_monitor_applied: bool,
 }
 
 // LVGLのオブジェクトは、LVGLのロックを保持して操作するため、スレッド間で移してよい
@@ -435,6 +438,7 @@ pub unsafe fn build_screens() {
         generator: DemoGenerator::new(DemoMode::Sweep),
         notice: ShiftNotice::new(notice_cfg),
         gear_applied: [None; 2],
+        perf_monitor_applied: false,
     };
     show_page(&mut ui, PAGE_GENERAL);
     update_demo_tag(&mut ui);
@@ -718,6 +722,10 @@ unsafe extern "C" fn on_timer(_timer: *mut lv_timer_t) {
     ui.generator.tick(now_ms, &mut ui.data);
     let snap = ui.data.snapshot(now_ms, &Limits::provisional());
 
+    if !ui.perf_monitor_applied {
+        ui.perf_monitor_applied = apply_perf_monitor_visibility();
+    }
+
     // 表示中のページだけ更新する（非表示のページは、表示したときに最新の状態へ更新される）
     match ui.current {
         0 => update_general(&mut ui.general, &snap),
@@ -740,6 +748,32 @@ unsafe extern "C" fn on_timer(_timer: *mut lv_timer_t) {
             ui.gear_applied[i] = Some(display);
         }
     }
+}
+
+/// LVGLの性能モニタ（FPS・CPU使用率）の表示・非表示を、`SHOW_DEMO_TAG` に合わせる。
+///
+/// 性能モニタは、LVGLが最初の描画で、システムレイヤに部品として作る。LVGL 8.4には、実行中に
+/// 表示を切り替える公式のAPIがないため、システムレイヤの子（性能モニタだけ）に、非表示のフラグを付ける。
+/// LVGLの版を上げたときは、この動作を確認すること。部品がまだ作られていなければ `false` を返す。
+unsafe fn apply_perf_monitor_visibility() -> bool {
+    let sys_layer = lv_disp_get_layer_sys(lv_disp_get_default());
+    let count = lv_obj_get_child_cnt(sys_layer);
+    if count == 0 {
+        return false;
+    }
+    for i in 0..count {
+        let child = lv_obj_get_child(sys_layer, i as i32);
+        if SHOW_DEMO_TAG {
+            lv_obj_clear_flag(child, LV_OBJ_FLAG_HIDDEN as lv_obj_flag_t);
+        } else {
+            lv_obj_add_flag(child, LV_OBJ_FLAG_HIDDEN as lv_obj_flag_t);
+        }
+        log::info!(
+            "性能モニタ: 部品{i} 非表示={}",
+            lv_obj_has_flag(child, LV_OBJ_FLAG_HIDDEN as lv_obj_flag_t)
+        );
+    }
+    true
 }
 
 unsafe fn update_general(g: &mut GeneralPage, s: &VehicleSnapshot) {
