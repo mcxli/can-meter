@@ -1,6 +1,7 @@
 use esp_idf_svc::sys::*;
-use shared::shift_notice::ShiftNoticeConfig;
 use std::io::{Read, Write};
+
+mod ui;
 
 fn main() {
     esp_idf_svc::sys::link_patches();
@@ -8,9 +9,6 @@ fn main() {
 
     log::info!("CAN meter main (Rust): display + SD trial");
 
-    // 共通ロジック（firmware/shared）がESP32-S3向けにもビルドできることの確認。
-    // 数値は試験用で、実車の設定値ではない。
-    log::info!("shift notice config check: {:?}", ShiftNoticeConfig::new(6500, 6000, 400));
 
     unsafe {
         // LCD・タッチ・LVGLタスクの初期化（C側のボード用ポート）。
@@ -20,10 +18,7 @@ fn main() {
 
         // LVGLのAPIはスレッドセーフではないため、ロックしてから操作する
         if lvgl_port_lock(-1) {
-            lv_demo_widgets();
-            let label = lv_label_create(lv_disp_get_layer_top(lv_disp_get_default()));
-            lv_label_set_text(label, c"Rust + LVGL + SD".as_ptr());
-            lv_obj_align(label, LV_ALIGN_TOP_LEFT as u8, 8, 4);
+            ui::build_general_screen();
             lvgl_port_unlock();
         }
 
