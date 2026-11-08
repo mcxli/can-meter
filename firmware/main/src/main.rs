@@ -18,7 +18,7 @@ fn main() {
 
         // LVGLのAPIはスレッドセーフではないため、ロックしてから操作する
         if lvgl_port_lock(-1) {
-            ui::build_general_screen();
+            ui::build_screens();
             lvgl_port_unlock();
         }
 

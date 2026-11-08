@@ -36,9 +36,12 @@ for size in 20 28; do
     --size "$size" --bpp 4 --format lvgl --lv-include lvgl.h --no-kerning -o "$OUT/jp_$size.c"
 done
 for size in 56 72 96; do
-  "$LV_FONT_CONV" --font "$BOLD" -r 0x30-0x39,0x2D,0x2E,0x3A \
+  "$LV_FONT_CONV" --font "$BOLD" -r 0x30-0x39,0x2D,0x2E,0x3A,0x4E \
     --size "$size" --bpp 4 --format lvgl --lv-include lvgl.h --no-kerning -o "$OUT/num_$size.c"
 done
+# ギア用（レース画面）。0-9、-、N のみ
+"$LV_FONT_CONV" --font "$BOLD" -r 0x30-0x39,0x2D,0x4E \
+  --size 128 --bpp 4 --format lvgl --lv-include lvgl.h --no-kerning -o "$OUT/num_128.c"
 for size in 28 36; do
   "$LV_FONT_CONV" --font "$ICONS" -r "$ICON_CODEPOINTS" \
     --size "$size" --bpp 4 --format lvgl --lv-include lvgl.h --no-kerning -o "$OUT/icons_$size.c"
