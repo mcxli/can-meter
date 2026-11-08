@@ -1,0 +1,8 @@
+[package]
+name = "shared"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+description = "CANメーターの共通ロジック（ESP依存なし。Macのホストで cargo test できる）"
+
+[dependencies]

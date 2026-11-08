@@ -1,4 +1,5 @@
 use esp_idf_svc::sys::*;
+use shared::shift_notice::ShiftNoticeConfig;
 use std::io::{Read, Write};
 
 fn main() {
@@ -6,6 +7,10 @@ fn main() {
     esp_idf_svc::log::EspLogger::initialize_default();
 
     log::info!("CAN meter main (Rust): display + SD trial");
+
+    // 共通ロジック（firmware/shared）がESP32-S3向けにもビルドできることの確認。
+    // 数値は試験用で、実車の設定値ではない。
+    log::info!("shift notice config check: {:?}", ShiftNoticeConfig::new(6500, 6000, 400));
 
     unsafe {
         // LCD・タッチ・LVGLタスクの初期化（C側のボード用ポート）。
