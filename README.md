@@ -41,7 +41,7 @@ M5Stack GPSユニット
 firmware/
   main/          メイン機のRustプロジェクト（esp-idf-svc）
   gps/           サブ機のRustプロジェクト（esp-idf-svc）
-  shared/        共通の通信形式・データ定義
+  shared/        共通ロジック（データ定義・復号・状態遷移等。ESP依存なし、Macで cargo test）
 docs/
   開発手順/      要件定義・開発手順
   実装仕様/      接続・画面・通信・CAN解析・ログ形式
@@ -49,4 +49,4 @@ docs/
 tools/           CSV確認・CANログ再生等の補助ツール
 ```
 
-上記は構成案であり、現時点では `docs/開発手順/` のみ存在します。
+上記は構成案です。現時点では `docs/`、`firmware/main`（試作）、`firmware/shared` が存在します。

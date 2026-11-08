@@ -25,6 +25,7 @@ component_dirs = ["components"]
 bindings_header = "bindings.h"
 
 [dependencies]
+shared = { path = "../shared" }
 log = "0.4"
 esp-idf-svc = { version = "0.53", features = ["critical-section", "embassy-time-driver", "embassy-sync"] }
 # Remove `generic-queue-8` if you plan to use `embassy-time` WITH `embassy-executor`
