@@ -11,6 +11,7 @@ use shared::shift_notice::{GearDisplay, ShiftNotice, ShiftNoticeConfig};
 use shared::vehicle::{
     format_degrees, format_time, value_or_dash, Limits, VehicleData, VehicleSnapshot,
 };
+use crate::logger::LogState;
 use std::ffi::{c_void, CStr, CString};
 use std::ptr::null_mut;
 use std::sync::Mutex;
@@ -49,7 +50,7 @@ const NOTICE_BLINK_MS: u32 = 400;
 /// 仮データで動作していることを画面に出す（右上のタグ。タップで仮データの種類を切り替える）。
 /// 右下のFPS・CPU使用率（LVGLの性能モニタ）も、これが `true` のときだけ表示する。
 /// 実データに切り替えるとき（段階7）は `false` にする。
-const SHOW_DEMO_TAG: bool = true;
+pub const SHOW_DEMO_TAG: bool = true;
 
 const PAGE_COUNT: usize = 4;
 const PAGE_GENERAL: usize = 0;
@@ -188,6 +189,12 @@ struct Ui {
     nav: [NavButton; PAGE_COUNT],
     current: usize,
     demo_tag: Option<Txt>,
+    /// 状態表示の「SD REC」の点（記録の状態で色を変える）
+    sd_dot: *mut lv_obj_t,
+    /// 記録停止ボタンの文字（記録の状態で変える）
+    stop_text: Txt,
+    /// 最後に反映した記録の状態
+    log_state_applied: Option<LogState>,
     general: GeneralPage,
     temp: TempPage,
     race: RacePage,
@@ -376,9 +383,13 @@ pub unsafe fn build_screens() {
     }
 
     // 状態表示（仮データのため、すべて正常として表示する）
+    let mut sd_dot = null_mut();
     for (i, name) in [c"CAN RX", c"GPS FIX", c"Wi-Fi", c"SD REC"].iter().enumerate() {
         let x = 16 + i as i32 * 150;
-        rect(screen, x, 14, 12, 12, GREEN, 6);
+        let dot = rect(screen, x, 14, 12, 12, GREEN, 6);
+        if i == 3 {
+            sd_dot = dot; // SD RECだけは、記録の状態に合わせて色を変える
+        }
         label(screen, name, f.jp20, TEXT_DIM, x + 20, 5);
     }
     let demo_tag = if SHOW_DEMO_TAG {
@@ -418,10 +429,11 @@ pub unsafe fn build_screens() {
         );
         NavButton { rect: rect_obj, icon: icon_obj, text: text_obj }
     });
-    // 記録停止（この段階では見た目のみ。記録の実装は段階5）
+    // 記録停止。押すと、残りのデータを書き出して、ファイルを閉じる（状態は、文字と「SD REC」の点で示す）
     let stop = rect(screen, 608, 410, 176, 56, RED, 8);
     label(stop, ICON_STOP, f.icon28, WHITE, 14, 13);
-    label(stop, c"記録停止", f.jp28, WHITE, 50, 10);
+    let stop_text = Txt::new(label(stop, c"記録停止", f.jp28, WHITE, 50, 10));
+    lv_obj_add_event_cb(stop, Some(on_stop), lv_event_code_t_LV_EVENT_CLICKED, null_mut());
 
     let notice_cfg = ShiftNoticeConfig::new(NOTICE_ACTIVATE_RPM, NOTICE_RELEASE_RPM, NOTICE_BLINK_MS)
         .expect("回転数通知の設定が不正");
@@ -430,6 +442,9 @@ pub unsafe fn build_screens() {
         nav: nav_buttons,
         current: PAGE_GENERAL,
         demo_tag,
+        sd_dot,
+        stop_text,
+        log_state_applied: None,
         general,
         temp,
         race,
@@ -704,6 +719,29 @@ unsafe extern "C" fn on_nav(e: *mut lv_event_t) {
     }
 }
 
+/// 記録停止ボタンが押された：残りのデータを書き出して、ファイルを閉じる（書き込みスレッドが処理する）。
+unsafe extern "C" fn on_stop(_e: *mut lv_event_t) {
+    crate::logger::request_stop();
+}
+
+/// 記録の状態を、「SD REC」の点の色と、記録停止ボタンの文字に反映する（変化したときだけ）。
+unsafe fn apply_log_state(ui: &mut Ui) {
+    let state = crate::logger::state();
+    if ui.log_state_applied == Some(state) {
+        return;
+    }
+    ui.log_state_applied = Some(state);
+    let (dot, text) = match state {
+        LogState::Idle => (GEAR_INVALID, "記録停止"),
+        LogState::Recording => (GREEN, "記録停止"),
+        LogState::Stopping => (ORANGE, "SAVING"),
+        LogState::Stopped => (CYAN, "SAVED"), // 保存済み。電源断してよい
+        LogState::Error => (RED, "SD ERROR"),
+    };
+    lv_obj_set_style_bg_color(ui.sd_dot, color(dot), 0);
+    ui.stop_text.set(text.to_string());
+}
+
 /// 右上のタグが押された：仮データの種類を、次へ切り替える（無効値・異常値・更新停止の表示確認用）。
 unsafe extern "C" fn on_demo_tag(_e: *mut lv_event_t) {
     if let Some(ui) = UI.lock().unwrap().as_mut() {
@@ -722,6 +760,7 @@ unsafe extern "C" fn on_timer(_timer: *mut lv_timer_t) {
     ui.generator.tick(now_ms, &mut ui.data);
     let snap = ui.data.snapshot(now_ms, &Limits::provisional());
 
+    apply_log_state(ui);
     if !ui.perf_monitor_applied {
         ui.perf_monitor_applied = apply_perf_monitor_visibility();
     }

@@ -1,14 +1,13 @@
 use esp_idf_svc::sys::*;
-use std::io::{Read, Write};
 
+mod logger;
 mod ui;
 
 fn main() {
     esp_idf_svc::sys::link_patches();
     esp_idf_svc::log::EspLogger::initialize_default();
 
-    log::info!("CAN meter main (Rust): display + SD trial");
-
+    log::info!("CAN meter main (Rust)");
 
     unsafe {
         // LCD・タッチ・LVGLタスクの初期化（C側のボード用ポート）。
@@ -22,25 +21,22 @@ fn main() {
             lvgl_port_unlock();
         }
 
-        // 画面表示中にSDをマウントする
+        // 画面表示中にSDをマウントする。失敗しても、画面は表示し続ける（記録だけができない）
         let ret = board_sd_mount();
         if ret != ESP_OK as esp_err_t {
             log::error!("SD mount failed: {ret}");
+            logger::set_error();
             return;
         }
     }
 
-    // RustのstdでSDを読み書きする
-    let path = "/sdcard/rust.txt";
-    match std::fs::File::create(path).and_then(|mut f| f.write_all(b"Hello from Rust!")) {
-        Ok(()) => log::info!("SD write ok: {path}"),
-        Err(e) => log::error!("SD write failed: {e}"),
+    // SD初期化の完了後に、自動で記録を開始する（GPSの測位や画面の状態を待たない）。
+    // CAN・GPSは、実データが来るまで（段階4・6）、仮データを記録する。
+    match logger::start("/sdcard", ui::SHOW_DEMO_TAG) {
+        Ok(tx) => logger::spawn_demo_producer(tx),
+        Err(e) => {
+            log::error!("記録を開始できない: {e}");
+            logger::set_error();
+        }
     }
-    let mut text = String::new();
-    match std::fs::File::open(path).and_then(|mut f| f.read_to_string(&mut text)) {
-        Ok(_) => log::info!("SD read ok: '{text}'"),
-        Err(e) => log::error!("SD read failed: {e}"),
-    }
-
-    log::info!("display + SD trial: done");
 }

@@ -49,3 +49,6 @@ CONFIG_LV_USE_DEMO_WIDGETS=y
 
 # Rustのformat!等でスタックを多く使うため、LVGLタスクのスタックを増やす（既定は6KB）
 CONFIG_EXAMPLE_LVGL_PORT_TASK_STACK_SIZE_KB=16
+
+# FATの長いファイル名（events_001.csv や LOG_0001_DEMO は、8.3形式に収まらない）
+CONFIG_FATFS_LFN_HEAP=y
