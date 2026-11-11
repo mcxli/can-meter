@@ -38,6 +38,10 @@ static STATE: AtomicU8 = AtomicU8::new(LogState::Idle as u8);
 static STOP_REQUESTED: AtomicBool = AtomicBool::new(false);
 /// キューあふれで捨てた件数（累計）。
 static DROPPED: AtomicU32 = AtomicU32::new(0);
+/// 負荷試験：仮データの送り手に、短時間に大量のフレームを送らせる要求（キューあふれの確認用）。
+static BURST_REQUESTED: AtomicBool = AtomicBool::new(false);
+/// 負荷試験で、一度に送るフレーム数（キュー長 512 より十分に多い）。
+const BURST_FRAMES: u32 = 3000;
 
 pub fn state() -> LogState {
     match STATE.load(Ordering::Relaxed) {
@@ -58,6 +62,12 @@ pub fn request_stop() {
     if state() == LogState::Recording {
         STOP_REQUESTED.store(true, Ordering::Relaxed);
     }
+}
+
+/// 負荷試験：仮データの送り手に、短時間に大量のフレームを送らせる（仮データのときだけ使う）。
+/// 書き込みが追いつかず、キューがあふれて、`QUEUE_OVERFLOW` が記録されることを確認するため。
+pub fn request_demo_burst() {
+    BURST_REQUESTED.store(true, Ordering::Relaxed);
 }
 
 /// SDの準備に失敗したなど、記録を開始できないことを知らせる。
@@ -364,14 +374,18 @@ pub fn spawn_demo_producer(tx: SyncSender<Msg>) {
             let mut gps_seq: u32 = 0;
             let mut first_gps = true;
             while state() == LogState::Recording {
+                if BURST_REQUESTED.swap(false, Ordering::Relaxed) {
+                    // 待たずに大量に送る。連番（データ）は、捨てた分も進むため、記録の欠番の数が、捨てた件数と一致する
+                    for _ in 0..BURST_FRAMES {
+                        let burst = demo_frame(n);
+                        if !send(&tx, Msg::Can(now_us(), burst)) {
+                            return;
+                        }
+                        n = n.wrapping_add(1);
+                    }
+                }
                 let t_us = now_us();
-                let frame = CanFrame {
-                    id: 0x100 + (n % 8),
-                    format: IdFormat::Standard,
-                    kind: FrameKind::Data,
-                    dlc: 8,
-                    data: (u64::from(n) << 8).to_be_bytes(),
-                };
+                let frame = demo_frame(n);
                 if !send(&tx, Msg::Can(t_us, frame)) {
                     break;
                 }
@@ -411,6 +425,17 @@ pub fn spawn_demo_producer(tx: SyncSender<Msg>) {
                 std::thread::sleep(Duration::from_millis(10));
             }
         });
+}
+
+/// 仮のCANフレーム。ID `0x100`〜`0x107` を順に使い、データは連番から作る。
+fn demo_frame(n: u32) -> CanFrame {
+    CanFrame {
+        id: 0x100 + (n % 8),
+        format: IdFormat::Standard,
+        kind: FrameKind::Data,
+        dlc: 8,
+        data: (u64::from(n) << 8).to_be_bytes(),
+    }
 }
 
 /// 仮のUTC。起動からの経過に合わせて進める（2026-11-09 12:34:56 を起点にした仮の値）。
