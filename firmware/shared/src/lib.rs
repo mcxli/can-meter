@@ -4,6 +4,7 @@
 //! Macのホストで `cargo test` により検証する。
 
 pub mod can;
+pub mod decode;
 pub mod demo;
 pub mod log_format;
 pub mod log_policy;

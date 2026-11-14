@@ -1,0 +1,9 @@
+[package]
+name = "logcheck"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+description = "SDに保存したログ（CSV）をMacで確認する（行の形式・時刻・IDごとの周期・欠落・復号の候補値）"
+
+[dependencies]
+shared = { path = "../../firmware/shared" }

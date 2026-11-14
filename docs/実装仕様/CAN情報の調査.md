@@ -22,6 +22,9 @@
 | F | equinox311「open-can-db」（GitHub）https://github.com/equinox311/open-can-db | 2013年以降のBRZ・FR-S向けのCANデータベース（xlsx）。更新は古く、不足があると記載 | 検索結果のみ。中身は未確認 |
 | G | OBDb「Subaru-BRZ」（GitHub）https://github.com/OBDb/Subaru-BRZ | OBD-II診断信号の定義 | 検索結果のみ。**診断要求が必要で、受信専用の方針に合わないため、対象外** |
 
+| H | dimitri-br「canlab-zn6」（GitHub、Apache-2.0、2026-09-10更新）https://github.com/dimitri-br/canlab-zn6 | 初代GT86/BRZ（ZN6/ZC6）向けのDBC（`definitions/zn6_gen1_common.dbc`）と、根拠の記録（`definitions/evidence.toml`）。DBCの内容は出典Bに基づき、確度はすべて「published」（公開情報のまま）。回転数の例「バイト2〜3が `88 13` なら5000rpm」を含む | DBC・根拠の記録を取得した（2026-11-15）。生ログは含まれていない |
+| I | Toyobaru「MAPA_CANID_GT86-BRZ_v2」（PDF）https://data.toyobaru.es/docs/MAPA_CANID_GT86-BRZ_v2.pdf | MT・AT別のCAN IDの一覧（出典Hが引用） | 取得したが、文字を抽出できず、中身は未確認 |
+
 commaai/opendbc には、BRZ・86向けのDBCは見つからなかった（Subaruの定義は、別の世代（Global Platform）向け）。
 
 ## 物理層・通信条件（候補）
@@ -57,6 +60,14 @@ commaai/opendbc には、BRZ・86向けのDBCは見つからなかった（Subar
 - 出典A（Racelogic）は、水温・油温の単位を「°C」としている。ただし、これは同社のソフトが、換算後に出す単位であり、CANの生の値の単位ではない。
 - **確認方法**：実車で、エンジンが冷えている状態（始動前・停車後しばらく置いた状態）の生の値を見る。気温15℃なら、摂氏なら約55、華氏なら約99になる。暖機後は、純正メーターの水温表示と、傾向（上がり方・安定する値）を比べる。診断要求の送信が必要な機器は、本システムでは使わないため、比較は、純正メーターの表示と外気温で行う。
 - 日本仕様のZC6は、メーターも摂氏が普通だが、実車で確認するまで、確定扱いにしない。
+
+## 公開されている生ログの有無（2026-11-15）
+
+初代BRZ/86の、実車の生のCANログ（candump・SavvyCAN等の記録ファイル）は、Web検索では見つからなかった。見つかったのは、信号の定義（出典B・H）、模擬の送信プログラム（RaceChronoDiyBleDeviceの作者の `FakeSubaruBRZ`。定義どおりにデータを作るもので、実車の検証にはならない）、フォーラムの断片的な値だけ。**定義の正しさは、実車ログでしか確かめられない。**
+
+## 実装した候補（2026-11-15）
+
+`firmware/shared/src/decode.rs` に、上の表の候補を実装した（回転数・アクセル開度・クラッチ・油温・水温・車速・舵角・ブレーキ・ギアの生の値）。テストは、出典Hの例（`88 13` → 5000rpm）と、出典Bの換算式から作ったデータで行っており、**「定義どおりに実装できたか」の確認であって、「定義が正しいか」の確認ではない**。ギアは、生の値の意味が未確定のため、車両情報（画面）には反映しない。`tools/logcheck` で、実車ログの候補値の範囲を表示できる。
 
 ## 手順書・設計への影響
 
