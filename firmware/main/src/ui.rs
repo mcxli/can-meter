@@ -392,6 +392,13 @@ pub unsafe fn build_screens() {
         }
         label(screen, name, f.jp20, TEXT_DIM, x + 20, 5);
     }
+    if SHOW_DEMO_TAG {
+        // 負荷試験：「SD REC」の表示（点と文字）を押すと、仮データのCANを短時間に大量に送る
+        // （キューあふれ・QUEUE_OVERFLOW の記録の確認用。仮データのときだけ有効）
+        let hit = rect(screen, 462, 0, 130, 36, BG, 0);
+        lv_obj_set_style_bg_opa(hit, 0, 0);
+        lv_obj_add_event_cb(hit, Some(on_sd_status), lv_event_code_t_LV_EVENT_CLICKED, null_mut());
+    }
     let demo_tag = if SHOW_DEMO_TAG {
         let tag = rect(screen, 616, 4, 170, 30, BG, 4);
         lv_obj_set_style_border_width(tag, 2, 0);
@@ -717,6 +724,11 @@ unsafe extern "C" fn on_nav(e: *mut lv_event_t) {
     if let Some(ui) = UI.lock().unwrap().as_mut() {
         show_page(ui, index);
     }
+}
+
+/// 「SD REC」の表示が押された：負荷試験のために、仮データを大量に送らせる（仮データのときだけ）。
+unsafe extern "C" fn on_sd_status(_e: *mut lv_event_t) {
+    crate::logger::request_demo_burst();
 }
 
 /// 記録停止ボタンが押された：残りのデータを書き出して、ファイルを閉じる（書き込みスレッドが処理する）。
