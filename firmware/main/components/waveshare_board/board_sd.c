@@ -75,6 +75,11 @@ static esp_err_t sd_power_up_clocks(void)
 
 esp_err_t board_sd_mount(void)
 {
+    // マウント済みなら、CSに触れずに戻る（CSをHighにすると、使用中のマウントが読み書きできなくなる）
+    if (s_card) {
+        ESP_LOGE(TAG, "already mounted");
+        return ESP_ERR_INVALID_STATE;
+    }
     uint8_t buf = 0x01;
     i2c_master_write_to_device(I2C_PORT, CH422G_ADDR_MODE, &buf, 1, I2C_TIMEOUT_MS / portTICK_PERIOD_MS);
     // まずSD_CSをHigh（非選択）にする。バックライトはonのまま
