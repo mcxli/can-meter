@@ -3,10 +3,12 @@
 #include "board_sd.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include "driver/i2c.h"
 #include "driver/sdspi_host.h"
 #include "driver/spi_common.h"
+#include "driver/spi_master.h"
 #include "esp_log.h"
 #include "esp_vfs_fat.h"
 #include "freertos/FreeRTOS.h"
@@ -27,18 +29,57 @@ static const char *TAG = "board_sd";
 // 出力ビット（bit n = EXIO n）：bit1=TP_RST、bit2=バックライト、bit3=LCD_RST、bit4=SD_CS（Lowで選択）、bit5=USB_SEL
 // 全て「通常動作」の状態：TP_RST解除・バックライトon・LCD_RST解除・SD_CS選択・USB_SEL=1
 #define CH422G_OUT_NORMAL 0x2E
+// SD_CSだけをHigh（非選択）にした状態
+#define CH422G_OUT_SD_DESELECT (CH422G_OUT_NORMAL | (1 << 4))
 
 static sdmmc_card_t *s_card = NULL;
 static sdmmc_host_t s_host = SDSPI_HOST_DEFAULT();
+
+static esp_err_t ch422g_write(uint8_t value)
+{
+    esp_err_t ret = i2c_master_write_to_device(I2C_PORT, CH422G_ADDR_OUT, &value, 1, I2C_TIMEOUT_MS / portTICK_PERIOD_MS);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "CH422G write failed: %s", esp_err_to_name(ret));
+    }
+    return ret;
+}
+
+// CSを使わない一時的なSPIデバイスで、0xFFを10バイト（80クロック）送る
+static esp_err_t sd_power_up_clocks(void)
+{
+    spi_device_interface_config_t dev_cfg = {
+        .clock_speed_hz = 400 * 1000,
+        .mode = 0,
+        .spics_io_num = -1,
+        .queue_size = 1,
+    };
+    spi_device_handle_t dev;
+    esp_err_t ret = spi_bus_add_device(s_host.slot, &dev_cfg, &dev);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "spi_bus_add_device failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    uint8_t ff[10];
+    memset(ff, 0xFF, sizeof(ff));
+    spi_transaction_t t = {
+        .length = sizeof(ff) * 8,
+        .tx_buffer = ff,
+    };
+    ret = spi_device_polling_transmit(dev, &t);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "power-up clocks failed: %s", esp_err_to_name(ret));
+    }
+    spi_bus_remove_device(dev);
+    return ret;
+}
 
 esp_err_t board_sd_mount(void)
 {
     uint8_t buf = 0x01;
     i2c_master_write_to_device(I2C_PORT, CH422G_ADDR_MODE, &buf, 1, I2C_TIMEOUT_MS / portTICK_PERIOD_MS);
-    buf = CH422G_OUT_NORMAL; // SD_CSをLowにしつつ、バックライトはonのまま
-    esp_err_t ret = i2c_master_write_to_device(I2C_PORT, CH422G_ADDR_OUT, &buf, 1, I2C_TIMEOUT_MS / portTICK_PERIOD_MS);
+    // まずSD_CSをHigh（非選択）にする。バックライトはonのまま
+    esp_err_t ret = ch422g_write(CH422G_OUT_SD_DESELECT);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "CH422G write failed: %s", esp_err_to_name(ret));
         return ret;
     }
 
@@ -53,6 +94,19 @@ esp_err_t board_sd_mount(void)
     ret = spi_bus_initialize(s_host.slot, &bus_cfg, SDSPI_DEFAULT_DMA);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "spi_bus_initialize failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    // SDの規格の電源投入の手順：CSをHighにしたまま、74回以上のクロックを送る。
+    // CSをCH422Gで固定しているため、ドライバーはこの手順を踏めない。カードによっては、これがないとCMD0が通らない
+    ret = sd_power_up_clocks();
+    if (ret != ESP_OK) {
+        spi_bus_free(s_host.slot);
+        return ret;
+    }
+    ret = ch422g_write(CH422G_OUT_NORMAL); // SD_CSをLow（選択）にする
+    if (ret != ESP_OK) {
+        spi_bus_free(s_host.slot);
         return ret;
     }
 
