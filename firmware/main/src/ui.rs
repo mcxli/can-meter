@@ -748,7 +748,7 @@ unsafe fn apply_log_state(ui: &mut Ui) {
         LogState::Recording => (GREEN, "記録停止"),
         LogState::Stopping => (ORANGE, "SAVING"),
         LogState::Stopped => (CYAN, "SAVED"), // 保存済み。電源断してよい
-        LogState::Error => (RED, "SD ERROR"),
+        LogState::Error => (RED, "SD ERR"),
     };
     lv_obj_set_style_bg_color(ui.sd_dot, color(dot), 0);
     ui.stop_text.set(text.to_string());
